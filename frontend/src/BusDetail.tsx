@@ -23,31 +23,13 @@ function StatusBadge({ status }: { status: string }) {
 
 function WorkOrderCard({ wo, onFix, user, inventory, onAdded }: { wo: WorkOrder; onFix: (id: number) => void; user: any; inventory: InventoryItem[]; onAdded: () => void }) {
     const [usedParts, setUsedParts] = useState<UsedPart[]>([]);
-    const [invId, setInvId] = useState<number | ''>('');
-    const [qty, setQty] = useState<number>(1);
-    const [adding, setAdding] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
 
     useEffect(() => {
         workOrderApi.listUsedParts(wo.id).then(setUsedParts).catch(console.error);
     }, [wo.id]);
 
-    const handleAddPart = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!invId || qty <= 0) return;
-        setAdding(true);
-        try {
-            await workOrderApi.addUsedPart(wo.id, { inventory_id: Number(invId), quantity_used: qty });
-            const parts = await workOrderApi.listUsedParts(wo.id);
-            setUsedParts(parts);
-            onAdded();
-            setInvId('');
-            setQty(1);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setAdding(false);
-        }
-    };
+    
 
     return (
         <div className={`card ${wo.status === 'Open' ? 'border-l-4 border-l-amber-500' : 'opacity-60'}`}>
@@ -100,36 +82,79 @@ function WorkOrderCard({ wo, onFix, user, inventory, onAdded }: { wo: WorkOrder;
                 </button>
             )}
 
-            {/* Add Part Form for Maintenance */}
+            {/* Add Part (opens modal) for Maintenance */}
             {user?.role === 'Maintenance' && wo.status === 'Open' && (
-                <form onSubmit={handleAddPart} className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <select
-                        value={invId}
-                        onChange={(e) => setInvId(Number(e.target.value))}
-                        className="input"
-                        required
-                    >
-                        <option value="">Select Inventory Item</option>
-                        {inventory.map(item => (
-                            <option key={item.id} value={item.id} disabled={item.quantity <= 0}>
-                                {item.item_name} (Available: {item.quantity})
-                            </option>
-                        ))}
-                    </select>
-                    <input
-                        type="number"
-                        min={1}
-                        value={qty}
-                        onChange={(e) => setQty(Number(e.target.value))}
-                        className="input"
-                        placeholder="Quantity"
-                        required
-                    />
-                    <button type="submit" className="btn btn-secondary" disabled={adding}>
-                        {adding ? 'Adding...' : 'Add Part'}
-                    </button>
-                </form>
+                <>
+                    <div className="mt-3">
+                        <button onClick={() => setShowAddModal(true)} className="btn btn-secondary w-full sm:w-auto">
+                            Add Part
+                        </button>
+                    </div>
+                    {showAddModal && (
+                        <AddPartModal
+                            woId={wo.id}
+                            inventory={inventory}
+                            onClose={() => setShowAddModal(false)}
+                            onAdded={async () => {
+                                const parts = await workOrderApi.listUsedParts(wo.id);
+                                setUsedParts(parts);
+                                onAdded();
+                            }}
+                        />
+                    )}
+                </>
             )}
+        </div>
+    );
+}
+
+function AddPartModal({ woId, inventory, onClose, onAdded }: { woId: number; inventory: InventoryItem[]; onClose: () => void; onAdded: () => void }) {
+    const [invId, setInvId] = useState<number | ''>('');
+    const [qty, setQty] = useState<number>(1);
+    const [adding, setAdding] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!invId || qty <= 0) return;
+        setAdding(true);
+        try {
+            await workOrderApi.addUsedPart(woId, { inventory_id: Number(invId), quantity_used: qty });
+            onAdded();
+            onClose();
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                <h2 className="text-lg font-semibold mb-3">Add Part</h2>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <select value={invId} onChange={(e) => setInvId(Number(e.target.value))} className="input" required>
+                            <option value="">Select Inventory Item</option>
+                            {inventory.map(item => (
+                                <option key={item.id} value={item.id} disabled={item.quantity <= 0}>
+                                    {item.item_name} (Available: {item.quantity})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="input" placeholder="Quantity" required />
+                    </div>
+
+                    <div className="flex gap-3">
+                        <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+                        <button type="submit" disabled={adding} className="btn btn-primary flex-1">{adding ? 'Adding...' : 'Add'}</button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }
