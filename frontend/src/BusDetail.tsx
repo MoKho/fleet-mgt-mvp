@@ -167,6 +167,7 @@ function CreateWorkOrderModal({ busId, onClose, onCreated }: {
     const { user } = useAuth();
     const [description, setDescription] = useState('');
     const [severity, setSeverity] = useState('SEV3');
+    const [isPm, setIsPm] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -176,7 +177,8 @@ function CreateWorkOrderModal({ busId, onClose, onCreated }: {
             await workOrderApi.create({
                 bus_id: busId,
                 description,
-                severity,
+                severity: isPm ? null : severity,
+                is_pm: isPm,
                 reported_by: user?.email || 'Unknown',
             });
             onCreated();
@@ -195,17 +197,33 @@ function CreateWorkOrderModal({ busId, onClose, onCreated }: {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Severity</label>
-                        <select
-                            value={severity}
-                            onChange={(e) => setSeverity(e.target.value)}
-                            className="input"
-                        >
-                            <option value="SEV1">SEV1 - Critical</option>
-                            <option value="SEV2">SEV2 - Medium</option>
-                            <option value="SEV3">SEV3 - Low</option>
-                        </select>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                        <div className="flex items-center gap-4">
+                            <label className="inline-flex items-center gap-2">
+                                <input type="radio" name="woType" checked={!isPm} onChange={() => setIsPm(false)} />
+                                <span>Repair</span>
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                                <input type="radio" name="woType" checked={isPm} onChange={() => setIsPm(true)} />
+                                <span>PM</span>
+                            </label>
+                        </div>
                     </div>
+
+                    {!isPm && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Severity</label>
+                            <select
+                                value={severity}
+                                onChange={(e) => setSeverity(e.target.value)}
+                                className="input"
+                            >
+                                <option value="SEV1">SEV1 - Critical</option>
+                                <option value="SEV2">SEV2 - Medium</option>
+                                <option value="SEV3">SEV3 - Low</option>
+                            </select>
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
@@ -213,7 +231,7 @@ function CreateWorkOrderModal({ busId, onClose, onCreated }: {
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             className="input min-h-[100px]"
-                            placeholder="Describe the issue..."
+                            placeholder={isPm ? 'Describe the preventive maintenance to perform...' : 'Describe the issue...'}
                             required
                         />
                     </div>
@@ -283,9 +301,9 @@ export default function BusDetail() {
     return (
         <div className="space-y-6">
             {/* Back Link */}
-            <Link to="/fleet" className="inline-flex items-center text-blue-600 hover:text-blue-700">
+            <Link to="/work-orders" className="inline-flex items-center text-blue-600 hover:text-blue-700">
                 <ChevronRight className="w-5 h-5 rotate-180" />
-                Back to Fleet
+                Back to Work Orders
             </Link>
 
             {/* Header */}

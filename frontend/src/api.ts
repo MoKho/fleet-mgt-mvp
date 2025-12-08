@@ -89,7 +89,7 @@ export const workOrderApi = {
         const response = await api.get<WorkOrder[]>('/work-orders');
         return response.data;
     },
-    create: async (data: { bus_id: string; description: string; severity?: string; reported_by: string }) => {
+    create: async (data: { bus_id: string; description: string; severity?: string | null; reported_by: string; is_pm?: boolean }) => {
         const response = await api.post<WorkOrder>('/work-orders', data);
         return response.data;
     },
