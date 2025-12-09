@@ -180,7 +180,7 @@ export default function Dashboard() {
 
             {/* Maintenance Backlog Table */}
             <div className="card">
-                <h2 className="text-lg font-semibold mb-4">Maintenance Backlog</h2>
+                <h2 className="text-lg font-semibold mb-4">Maintenance Backlog (Critical)</h2>
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead>
