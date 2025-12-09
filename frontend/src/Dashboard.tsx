@@ -117,6 +117,12 @@ export default function Dashboard() {
             return new Date(a.date).getTime() - new Date(b.date).getTime();
         });
 
+    const activeCount = onServiceBuses.length;
+    const totalCount = buses.length;
+    const maintenanceCount = totalCount - activeCount;
+    const activePercent = totalCount ? ((activeCount / totalCount) * 100) : 0;
+    const maintenancePercent = totalCount ? ((maintenanceCount / totalCount) * 100) : 0;
+
     return (
         <div className="space-y-6">
             <div>
@@ -128,15 +134,15 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard
                     title="Active Buses"
-                    value={onServiceBuses.length}
-                    subtitle="Currently on service"
+                    value={activeCount}
+                    subtitle={`${totalCount} total • ${activePercent.toFixed(1)}% of fleet`}
                     icon={BusIcon}
                     color="blue"
                 />
                 <KPICard
                     title="In Maintenance"
-                    value={buses.length - onServiceBuses.length}
-                    subtitle="At garages"
+                    value={maintenanceCount}
+                    subtitle={`${maintenancePercent.toFixed(1)}% of fleet`}
                     icon={Wrench}
                     color="amber"
                 />

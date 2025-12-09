@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from datetime import timedelta, datetime
 import models, schemas, database
 from database import SessionLocal, engine
-from typing import List
+from typing import List, Optional
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -85,8 +85,8 @@ def calculate_bus_status(bus: models.Bus) -> str:
 
 @app.get("/buses")
 def read_buses(
-    skip: int = 0, 
-    limit: int = 100, 
+    skip: int = 0,
+    limit: Optional[int] = None,
     garage: models.Garage = None, # Filter by garage
     db: Session = Depends(get_db)
 ):
@@ -99,7 +99,10 @@ def read_buses(
          elif garage == models.Garage.SOUTH:
              query = query.filter(models.Bus.location == models.BusLocation.SOUTH_GARAGE)
     
-    buses = query.offset(skip).limit(limit).all()
+    q = query.offset(skip)
+    if limit is not None:
+        q = q.limit(limit)
+    buses = q.all()
     
     # Convert to dicts with computed status
     result = []

@@ -30,15 +30,26 @@ def seed_data():
 
     # Buses
     buses = []
-    for i in range(1, 301):
-        bus_id = f"N-{100+i}" if i % 2 != 0 else f"S-{200+i}"
-        location = random.choice(list(BusLocation))
-        # Ensure ID alignment with garage approximately
-        if bus_id.startswith("N") and location == BusLocation.SOUTH_GARAGE:
-             location = BusLocation.NORTH_GARAGE
-        if bus_id.startswith("S") and location == BusLocation.NORTH_GARAGE:
-             location = BusLocation.SOUTH_GARAGE
-        
+    TOTAL_BUSES = 300
+    MAX_NORTH = 24
+    MAX_SOUTH = 19
+
+    # Choose which bus indices will be assigned to North and South garages
+    all_indices = list(range(1, TOTAL_BUSES + 1))
+    north_indices = set(random.sample(all_indices, min(MAX_NORTH, TOTAL_BUSES)))
+    remaining = [i for i in all_indices if i not in north_indices]
+    south_indices = set(random.sample(remaining, min(MAX_SOUTH, len(remaining))))
+
+    for i in range(1, TOTAL_BUSES + 1):
+        # Use TL-{number} as bus id
+        bus_id = f"TL-{i}"
+        if i in north_indices:
+            location = BusLocation.NORTH_GARAGE
+        elif i in south_indices:
+            location = BusLocation.SOUTH_GARAGE
+        else:
+            location = BusLocation.ON_SERVICE
+
         buses.append(Bus(
             id=bus_id,
             location=location,
@@ -75,51 +86,164 @@ def seed_data():
     db.commit()
 
     # WorkOrders
-    # Creating Critical WOs
-    for i in critical_indices:
+    issue_pool_sev1 = [
+        "Engine overheating — immediate shutdown",
+        "Brake hydraulic failure — unsafe to operate",
+        "Steering loss — vehicle control compromised",
+        "Transmission locked in gear — cannot shift",
+        "Fuel leak detected — fire hazard",
+        "Air brake compressor failure",
+        "Major coolant system breach",
+        "Loss of braking assist — urgent",
+        "Severe electrical short causing stalls",
+    ]
+    issue_pool_sev2 = [
+        "Door mechanism jammed intermittently",
+        "AC cooling weak — needs service",
+        "Suspension air leak — reduced ride quality",
+        "Alternator output low — charging issues",
+        "Wheelchair ramp sensor fault",
+        "Exhaust clamp loose — excessive noise",
+        "Intermittent engine misfire",
+        "Fuel pressure regulator fault",
+    ]
+    issue_pool_sev3 = [
+        "Broken passenger seat",
+        "Wiper blades streaking",
+        "Headlight bulb dim",
+        "Minor body panel dent",
+        "Seat fabric tear",
+        "Interior light flicker",
+        "Cabin heater low output",
+        "Loose trim panel rattling",
+    ]
+
+    # Define desired counts
+    MAX_SEV1 = 30
+    MAX_SEV23 = 46  # combined SEV2 + SEV3
+    PM_DUE_COUNT = 18
+    PM_OVERDUE_COUNT = 22
+
+    # Operate only on buses located in garages for assigning work orders
+    garage_buses = [b for b in buses if b.location in (BusLocation.NORTH_GARAGE, BusLocation.SOUTH_GARAGE)]
+    available_ids = list(range(len(garage_buses)))
+
+    # Helper to sample unique indices from available_ids
+    def pick(n):
+        nonlocal available_ids
+        n = min(n, len(available_ids))
+        picked = random.sample(available_ids, n)
+        # remove picked
+        available_ids = [i for i in available_ids if i not in picked]
+        return picked
+
+    # Pick SEV1 buses
+    sev1_indices = pick(MAX_SEV1)
+    for idx in sev1_indices:
+        bus = garage_buses[idx]
         wo = WorkOrder(
-            bus_id=buses[i].id,
-            description="Engine failure",
+            bus_id=bus.id,
+            description=random.choice(issue_pool_sev1),
             severity=Severity.SEV1,
-            status=WorkOrderStatus.OPEN
+            status=WorkOrderStatus.OPEN,
+            is_pm=False,
         )
         db.add(wo)
-    
-    for i in critical_overdue_indices:
+
+    # Pick SEV2/3 buses
+    sev23_indices = pick(MAX_SEV23)
+    for idx in sev23_indices:
+        bus = garage_buses[idx]
+        sev = Severity.SEV2 if random.random() < 0.5 else Severity.SEV3
+        desc = random.choice(issue_pool_sev2 if sev == Severity.SEV2 else issue_pool_sev3)
         wo = WorkOrder(
-            bus_id=buses[i].id,
-            description="Brake system critical failure",
-            severity=Severity.SEV1,
-            status=WorkOrderStatus.OPEN
+            bus_id=bus.id,
+            description=desc,
+            severity=sev,
+            status=WorkOrderStatus.OPEN,
+            is_pm=False,
         )
         db.add(wo)
-    
-    # Add some random WOs
-    for _ in range(20):
-        bus = random.choice(buses)
+
+    # Pick PM due (not overdue) and PM overdue buses
+    pm_due_indices = pick(PM_DUE_COUNT)
+    for idx in pm_due_indices:
+        bus = garage_buses[idx]
+        # set last_service_mileage to make it due (5,001-9,999)
+        bus.last_service_mileage = bus.mileage - random.randint(5001, 9999)
+        bus.due_for_pm = True
         wo = WorkOrder(
-             bus_id=bus.id,
-             description="Broken Seat",
-             severity=Severity.SEV3,
-             status=WorkOrderStatus.OPEN
+            bus_id=bus.id,
+            description="Scheduled preventive maintenance (Due)",
+            severity=None,
+            status=WorkOrderStatus.OPEN,
+            is_pm=True,
+        )
+        db.add(wo)
+
+    pm_overdue_indices = pick(PM_OVERDUE_COUNT)
+    for idx in pm_overdue_indices:
+        bus = garage_buses[idx]
+        # set last_service_mileage to make it overdue (>10000)
+        bus.last_service_mileage = bus.mileage - random.randint(10001, 15000)
+        bus.due_for_pm = True
+        wo = WorkOrder(
+            bus_id=bus.id,
+            description="Scheduled preventive maintenance (Overdue)",
+            severity=None,
+            status=WorkOrderStatus.OPEN,
+            is_pm=True,
+        )
+        db.add(wo)
+
+    # Optionally add a few small random low-priority WOs on remaining buses (without exceeding totals)
+    # We'll add up to 10 extra SEV3s if there are still available garage buses
+    extra_pool = min(10, len(available_ids))
+    extra_indices = pick(extra_pool)
+    for idx in extra_indices:
+        bus = garage_buses[idx]
+        wo = WorkOrder(
+            bus_id=bus.id,
+            description=random.choice(issue_pool_sev3),
+            severity=Severity.SEV3,
+            status=WorkOrderStatus.OPEN,
+            is_pm=False,
         )
         db.add(wo)
 
     # Inventory
     inventory = [
-        Inventory(item_name="Brake Pads", quantity=5, threshold=10, garage=Garage.NORTH),
-        Inventory(item_name="Brake Pads", quantity=5, threshold=10, garage=Garage.SOUTH),
-        Inventory(item_name="Oil", quantity=50, threshold=20, garage=Garage.NORTH),
-        Inventory(item_name="Oil", quantity=50, threshold=20, garage=Garage.SOUTH),
+        Inventory(item_name="Brake Pads (Heavy Duty)", quantity=8, threshold=10, garage=Garage.NORTH),
+        Inventory(item_name="Brake Pads (Heavy Duty)", quantity=15, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Engine Oil (Bulk Barrel)", quantity=120, threshold=50, garage=Garage.NORTH),
+        Inventory(item_name="Engine Oil (Bulk Barrel)", quantity=90, threshold=50, garage=Garage.SOUTH),
+        Inventory(item_name="Air Filter (Engine)", quantity=4, threshold=5, garage=Garage.NORTH),
+        Inventory(item_name="Air Filter (Engine)", quantity=12, threshold=5, garage=Garage.SOUTH),
+        Inventory(item_name="Front Tire (Standard)", quantity=25, threshold=10, garage=Garage.NORTH),
+        Inventory(item_name="Front Tire (Standard)", quantity=19, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Wiper Blades (32-in)", quantity=6, threshold=5, garage=Garage.NORTH),
+        Inventory(item_name="Wiper Blades (32-in)", quantity=3, threshold=5, garage=Garage.SOUTH),
+        Inventory(item_name="Alternator (Bosch)", quantity=2, threshold=5, garage=Garage.NORTH),
+        Inventory(item_name="Alternator (Bosch)", quantity=11, threshold=5, garage=Garage.SOUTH),
+        Inventory(item_name="Headlight Bulb (LED)", quantity=35, threshold=10, garage=Garage.NORTH),
+        Inventory(item_name="Headlight Bulb (LED)", quantity=18, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Starter Motor (Diesel)", quantity=22, threshold=10, garage=Garage.NORTH),
+        Inventory(item_name="Starter Motor (Diesel)", quantity=4, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Coolant (Bulk)", quantity=45, threshold=15, garage=Garage.NORTH),
+        Inventory(item_name="Coolant (Bulk)", quantity=28, threshold=15, garage=Garage.SOUTH),
+        Inventory(item_name="Fan Belt (Serpentine)", quantity=3, threshold=10, garage=Garage.NORTH),
+        Inventory(item_name="Fan Belt (Serpentine)", quantity=25, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Fuel Injector (Common)", quantity=7, threshold=5, garage=Garage.NORTH),
+        Inventory(item_name="Turbocharger (Model X)", quantity=1, threshold=5, garage=Garage.NORTH),
+        Inventory(item_name="Seat Fabric Roll (Blue)", quantity=15, threshold=10, garage=Garage.NORTH),
+        Inventory(item_name="North-Specific Lift Fluid", quantity=60, threshold=30, garage=Garage.NORTH),
+        Inventory(item_name="Diagnostic Cable Set", quantity=2, threshold=5, garage=Garage.NORTH),
+        Inventory(item_name="South-Specific Lift Fluid", quantity=5, threshold=30, garage=Garage.SOUTH),
+        Inventory(item_name="AC Compressor (Bus)", quantity=3, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Wheelchair Ramp Motor", quantity=12, threshold=5, garage=Garage.SOUTH),
+        Inventory(item_name="Body Panel (Side Door)", quantity=8, threshold=10, garage=Garage.SOUTH),
+        Inventory(item_name="Transmission Filter Kit", quantity=7, threshold=5, garage=Garage.SOUTH),
     ]
-    # 10 Random items
-    for i in range(10):
-        inventory.append(Inventory(
-            item_name=f"Part-{i}",
-            quantity=random.randint(0, 50),
-            threshold=5,
-            garage=random.choice(list(Garage))
-        ))
     
     db.add_all(inventory)
     db.commit()
