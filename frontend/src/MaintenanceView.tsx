@@ -92,6 +92,8 @@ export default function MaintenanceView() {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | 'critical' | 'pm'>('all');
     const [showAllGarages, setShowAllGarages] = useState(false);
+    const [sortBy, setSortBy] = useState<'status' | null>('status');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
     useEffect(() => {
         busApi.getAll().then((data) => {
@@ -136,10 +138,25 @@ export default function MaintenanceView() {
         );
     }
 
-    // Sort: Critical first, then by status
-    filteredBuses.sort((a, b) => {
-        const order = { Critical: 0, 'Needs Maintenance': 1, Ready: 2 };
-        return (order[a.status] || 2) - (order[b.status] || 2);
+    // Sorting: default by `status` (Critical, Needs Maintenance, Ready).
+    const statusOrder: Record<string, number> = { Critical: 0, 'Needs Maintenance': 1, Ready: 2 };
+
+    function toggleSort(field: 'status') {
+        if (sortBy === field) {
+            setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortBy(field);
+            setSortDirection('asc');
+        }
+    }
+
+    const sortedBuses = [...filteredBuses].sort((a, b) => {
+        if (sortBy === 'status') {
+            const oa = statusOrder[a.status] ?? 2;
+            const ob = statusOrder[b.status] ?? 2;
+            return (oa - ob) * (sortDirection === 'asc' ? 1 : -1);
+        }
+        return 0;
     });
 
     return (
@@ -202,10 +219,10 @@ export default function MaintenanceView() {
 
             {/* Mobile View: Cards */}
             <div className="md:hidden space-y-3">
-                {filteredBuses.map(bus => (
+                {sortedBuses.map(bus => (
                     <BusCard key={bus.id} bus={bus} />
                 ))}
-                {filteredBuses.length === 0 && (
+                {sortedBuses.length === 0 && (
                     <div className="text-center py-8 text-slate-500">
                         No buses found matching your criteria
                     </div>
@@ -220,7 +237,17 @@ export default function MaintenanceView() {
                             <tr className="border-b border-slate-200">
                                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Bus ID</th>
                                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Model</th>
-                                <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
+                                <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
+                                    <button
+                                        onClick={() => toggleSort('status')}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <span>Status</span>
+                                        <span className="text-slate-400 text-xs">
+                                            {sortBy === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                                        </span>
+                                    </button>
+                                </th>
                                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Location</th>
                                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Mileage</th>
                                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">PM</th>
@@ -228,12 +255,12 @@ export default function MaintenanceView() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredBuses.map(bus => (
+                            {sortedBuses.map(bus => (
                                 <BusTableRow key={bus.id} bus={bus} />
                             ))}
                         </tbody>
                     </table>
-                    {filteredBuses.length === 0 && (
+                    {sortedBuses.length === 0 && (
                         <div className="text-center py-8 text-slate-500">
                             No buses found matching your criteria
                         </div>
