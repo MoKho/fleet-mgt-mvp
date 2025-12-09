@@ -1,0 +1,63 @@
+steps:
+  # 1. Build Backend Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/backend', './backend']
+  
+  # 2. Push Backend Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/backend']
+  
+  # 3. Deploy Backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'fleet-backend'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/backend'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+  
+  # 4. Get Backend URL and save to file
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud run services describe fleet-backend --region us-central1 --format 'value(status.url)' > /workspace/backend_url.txt
+        echo "Backend URL: $(cat /workspace/backend_url.txt)"
+
+  # 5. Build Frontend Image (injecting Backend URL)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        docker build --build-arg VITE_API_URL=$(cat /workspace/backend_url.txt) -t us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/frontend ./frontend
+
+  # 6. Push Frontend Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/frontend']
+
+  # 7. Deploy Frontend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'fleet-frontend'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/frontend'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/backend'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/fleet-repo/frontend'
