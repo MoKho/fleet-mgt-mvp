@@ -54,7 +54,7 @@ def seed_data():
         mileage = random.randint(5000, 150000)
         # last service between (mileage - 20000) and mileage to keep realistic history,
         # but not negative
-        last_service_mileage = random.randint(max(0, mileage - 20000), mileage)
+        last_service_mileage = random.randint(max(0, mileage - 20000), mileage - 3560)
 
         buses.append(Bus(
             id=bus_id,
@@ -102,7 +102,7 @@ def seed_data():
     ]
 
     # Define desired counts
-    MAX_SEV1 = 30
+    MAX_SEV1 = 33
     MAX_SEV23 = 46  # combined SEV2 + SEV3
     PM_DUE_COUNT = 18
     PM_OVERDUE_COUNT = 22
@@ -110,6 +110,8 @@ def seed_data():
     # Operate only on buses located in garages for assigning work orders
     garage_buses = [b for b in buses if b.location in (BusLocation.NORTH_GARAGE, BusLocation.SOUTH_GARAGE)]
     available_ids = list(range(len(garage_buses)))
+    # Maintain a separate pool for PM selection so PM can coexist with issue WOs
+    available_ids_pm = list(range(len(garage_buses)))
 
     # Helper to sample unique indices from available_ids
     def pick(n):
@@ -118,6 +120,14 @@ def seed_data():
         picked = random.sample(available_ids, n)
         # remove picked
         available_ids = [i for i in available_ids if i not in picked]
+        return picked
+
+    # PM picks should not be constrained by SEV picks; allow overlap
+    def pick_pm(n):
+        nonlocal available_ids_pm
+        n = min(n, len(available_ids_pm))
+        picked = random.sample(available_ids_pm, n)
+        # Do not remove picked from PM pool to allow multiple PM categories if needed
         return picked
 
     # Pick SEV1 buses
@@ -149,7 +159,7 @@ def seed_data():
         db.add(wo)
 
     # Pick PM due (not overdue) and PM overdue buses
-    pm_due_indices = pick(PM_DUE_COUNT)
+    pm_due_indices = pick_pm(PM_DUE_COUNT)
     for idx in pm_due_indices:
         bus = garage_buses[idx]
         # set last_service_mileage to make it due (5,001-9,999)
@@ -157,14 +167,14 @@ def seed_data():
         bus.due_for_pm = True
         wo = WorkOrder(
             bus_id=bus.id,
-            description="Scheduled preventive maintenance (Due)",
+            description="Scheduled preventive maintenance",
             severity=None,
             status=WorkOrderStatus.OPEN,
             is_pm=True,
         )
         db.add(wo)
 
-    pm_overdue_indices = pick(PM_OVERDUE_COUNT)
+    pm_overdue_indices = pick_pm(PM_OVERDUE_COUNT)
     for idx in pm_overdue_indices:
         bus = garage_buses[idx]
         # set last_service_mileage to make it overdue (>10000)
@@ -172,7 +182,7 @@ def seed_data():
         bus.due_for_pm = True
         wo = WorkOrder(
             bus_id=bus.id,
-            description="Scheduled preventive maintenance (Overdue)",
+            description="Scheduled preventive maintenance",
             severity=None,
             status=WorkOrderStatus.OPEN,
             is_pm=True,
