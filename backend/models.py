@@ -26,6 +26,11 @@ class WorkOrderStatus(str, enum.Enum):
     OPEN = "Open"
     FIXED = "Fixed"
 
+class BusStatus(str, enum.Enum):
+    READY = "Ready"
+    CRITICAL = "Critical"
+    NEEDS_MAINTENANCE = "Needs Maintenance"
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -42,16 +47,10 @@ class Bus(Base):
     last_service_mileage = Column(Integer, default=0)
     model = Column(String)
     due_for_pm = Column(Boolean, default=False)
+    status = Column(Enum(BusStatus), default=BusStatus.READY)
     
     work_orders = relationship("WorkOrder", back_populates="bus")
 
-    @property
-    def status(self):
-        # This will be handled in Pydantic or logic, but logical representation:
-        # Ready: No open WorkOrders
-        # Critical: At least one SEV1 WorkOrder
-        # Needs Maintenance: Only SEV2/SEV3 WorkOrders
-        pass
 
 class WorkOrder(Base):
     __tablename__ = "work_orders"

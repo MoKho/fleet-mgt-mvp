@@ -80,7 +80,7 @@ def calculate_bus_status(bus: models.Bus) -> str:
 
     # If there are no open work orders with a severity, the bus is Ready
     if not open_wos_with_sev:
-        return "Ready"
+        return models.BusStatus.READY
 
     # Normalize severity values to their string value to be robust against Enum vs string
     def sev_value(wo):
@@ -89,10 +89,25 @@ def calculate_bus_status(bus: models.Bus) -> str:
 
     # If any SEV1 exists, it's Critical
     if any(sev_value(wo) == models.Severity.SEV1.value for wo in open_wos_with_sev):
-        return "Critical"
+        return models.BusStatus.CRITICAL
 
     # Otherwise there are SEV2/SEV3 open work orders
-    return "Needs Maintenance"
+    return models.BusStatus.NEEDS_MAINTENANCE
+
+
+def recalculate_and_persist_bus_status(bus_id: str, db: Session):
+    """Recalculate a bus's status from its open work orders and persist to the DB."""
+    bus = db.query(models.Bus).options(joinedload(models.Bus.work_orders)).filter(models.Bus.id == bus_id).first()
+    if not bus:
+        return None
+    new_status = calculate_bus_status(bus)
+    # Only update if different to avoid unnecessary writes
+    if bus.status != new_status:
+        bus.status = new_status
+        db.add(bus)
+        db.commit()
+        db.refresh(bus)
+    return bus
 
 @app.get("/buses")
 def read_buses(
@@ -125,7 +140,7 @@ def read_buses(
             "mileage": bus.mileage,
             "last_service_mileage": bus.last_service_mileage,
             "due_for_pm": bus.due_for_pm,
-            "status": calculate_bus_status(bus)
+            "status": calculate_bus_status(bus).value
         })
     
     return result
@@ -142,7 +157,7 @@ def read_bus(bus_id: str, db: Session = Depends(get_db)):
         "mileage": bus.mileage,
         "last_service_mileage": bus.last_service_mileage,
         "due_for_pm": bus.due_for_pm,
-        "status": calculate_bus_status(bus)
+        "status": calculate_bus_status(bus).value
     }
 
 @app.put("/buses/{bus_id}/mileage")
@@ -168,6 +183,8 @@ def update_mileage(bus_id: str, mileage: int, db: Session = Depends(get_db)):
         db.add(wo)
     
     db.commit()
+    # If we created a WO or changed due_for_pm, recalc and persist bus status
+    recalculate_and_persist_bus_status(bus.id, db)
     return {"status": "updated"}
 
 @app.get("/work-orders", response_model=List[schemas.WorkOrder])
@@ -185,6 +202,12 @@ def create_work_order(wo: schemas.WorkOrderCreate, db: Session = Depends(get_db)
     db.add(db_wo)
     db.commit()
     db.refresh(db_wo)
+    # Recalculate and persist bus status after creating a WO
+    try:
+        recalculate_and_persist_bus_status(db_wo.bus_id, db)
+    except Exception:
+        # Non-fatal: don't break WO creation for persistence issues
+        pass
     return db_wo
 
 @app.put("/work-orders/{wo_id}/fix")
@@ -203,6 +226,11 @@ def fix_work_order(wo_id: int, db: Session = Depends(get_db)):
             bus.due_for_pm = False
             
     db.commit()
+    # Recalculate and persist bus status after fixing WO
+    try:
+        recalculate_and_persist_bus_status(wo.bus_id, db)
+    except Exception:
+        pass
     return {"status": "fixed"}
 
 @app.get("/inventory", response_model=List[schemas.Inventory])
