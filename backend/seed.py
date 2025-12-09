@@ -50,38 +50,21 @@ def seed_data():
         else:
             location = BusLocation.ON_SERVICE
 
+        # Generate mileage first, then ensure last_service_mileage <= mileage
+        mileage = random.randint(5000, 150000)
+        # last service between (mileage - 20000) and mileage to keep realistic history,
+        # but not negative
+        last_service_mileage = random.randint(max(0, mileage - 20000), mileage)
+
         buses.append(Bus(
             id=bus_id,
             location=location,
-            mileage=random.randint(5000, 150000),
-            last_service_mileage=random.randint(5000, 150000), # will check for PM logic separate
+            mileage=mileage,
+            last_service_mileage=last_service_mileage, # will check for PM logic separate
             model=random.choice(["Volvo 7900", "New Flyer Xcelsior", "Gillig Low Floor"]),
             due_for_pm=False
         ))
     
-    # Apply specific conditions
-    # 10 Due for PM (+5000 to +10000)
-    for i in range(10):
-        bus = buses[i]
-        bus.last_service_mileage = bus.mileage - random.randint(5001, 9999)
-        bus.due_for_pm = True
-    
-    # 10 Overdue (> 10000)
-    for i in range(10, 20):
-        bus = buses[i]
-        bus.last_service_mileage = bus.mileage - random.randint(10001, 15000)
-        bus.due_for_pm = True
-
-    # 10 Critical (SEV1 WorkOrder) -> Will add WO later
-    critical_indices = range(20, 30)
-
-    # 6 Critical AND Overdue
-    critical_overdue_indices = range(30, 36)
-    for i in critical_overdue_indices:
-        bus = buses[i]
-        bus.last_service_mileage = bus.mileage - random.randint(10001, 15000)
-        bus.due_for_pm = True
-
     db.add_all(buses)
     db.commit()
 
