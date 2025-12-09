@@ -112,8 +112,9 @@ export const workOrderApi = {
 };
 
 export const inventoryApi = {
-    getAll: async () => {
-        const response = await api.get<InventoryItem[]>('/inventory');
+    getAll: async (garage?: string) => {
+        const params = garage && garage !== 'all' ? { garage } : {};
+        const response = await api.get<InventoryItem[]>('/inventory', { params });
         return response.data;
     },
 };

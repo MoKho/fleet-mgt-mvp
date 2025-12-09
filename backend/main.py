@@ -195,13 +195,21 @@ def fix_work_order(wo_id: int, db: Session = Depends(get_db)):
     return {"status": "fixed"}
 
 @app.get("/inventory", response_model=List[schemas.Inventory])
-def read_inventory(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Maintenance users should only see inventory from their garage; ops can see all
+def read_inventory(garage: models.Garage = None, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Support optional garage query parameter.
+    # If a maintenance user does not provide a garage, default to their assigned garage.
     query = db.query(models.Inventory)
     if current_user.role == models.Role.MAINTENANCE:
         if not current_user.assigned_garage:
             raise HTTPException(status_code=400, detail="Maintenance user missing assigned garage")
-        query = query.filter(models.Inventory.garage == current_user.assigned_garage)
+        if garage is None:
+            query = query.filter(models.Inventory.garage == current_user.assigned_garage)
+        else:
+            # Allow maintenance users to view other garages when explicitly requested
+            query = query.filter(models.Inventory.garage == garage)
+    else:
+        if garage is not None:
+            query = query.filter(models.Inventory.garage == garage)
     return query.all()
 
 @app.get("/work-orders/{wo_id}/used-parts", response_model=List[schemas.UsedPart])

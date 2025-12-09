@@ -39,11 +39,19 @@ export default function InventoryView() {
     const [garageFilter, setGarageFilter] = useState<string>('all');
 
     useEffect(() => {
-        inventoryApi.getAll().then((data) => {
+        // Request inventory based on the selected garage filter.
+        // Backend will default maintenance users to their assigned garage when no garage param provided.
+        const garageParam = garageFilter !== 'all' ? garageFilter : undefined;
+        setLoading(true);
+        inventoryApi.getAll(garageParam).then((data) => {
             setInventory(data);
             setLoading(false);
+        }).catch(err => {
+            console.error('Failed to fetch inventory', err);
+            setInventory([]);
+            setLoading(false);
         });
-    }, []);
+    }, [garageFilter, user]);
 
     if (loading) {
         return (
@@ -92,18 +100,23 @@ export default function InventoryView() {
                 >
                     {user?.role === 'Maintenance' ? 'My Garage' : 'All'}
                 </button>
-                <button
-                    onClick={() => setGarageFilter('North')}
-                    className={`btn ${garageFilter === 'North' ? 'btn-primary' : 'btn-secondary'}`}
-                >
-                    North
-                </button>
-                <button
-                    onClick={() => setGarageFilter('South')}
-                    className={`btn ${garageFilter === 'South' ? 'btn-primary' : 'btn-secondary'}`}
-                >
-                    South
-                </button>
+                {/* For maintenance users, hide the button that matches their assigned garage since 'My Garage' already covers it */}
+                {!(user?.role === 'Maintenance' && user.assigned_garage === 'North') && (
+                    <button
+                        onClick={() => setGarageFilter('North')}
+                        className={`btn ${garageFilter === 'North' ? 'btn-primary' : 'btn-secondary'}`}
+                    >
+                        North
+                    </button>
+                )}
+                {!(user?.role === 'Maintenance' && user.assigned_garage === 'South') && (
+                    <button
+                        onClick={() => setGarageFilter('South')}
+                        className={`btn ${garageFilter === 'South' ? 'btn-primary' : 'btn-secondary'}`}
+                    >
+                        South
+                    </button>
+                )}
             </div>
 
             {/* Mobile Cards */}

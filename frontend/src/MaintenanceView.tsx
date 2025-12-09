@@ -90,7 +90,7 @@ export default function MaintenanceView() {
     const [buses, setBuses] = useState<Bus[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState<'all' | 'critical' | 'pm'>('all');
+    const [filter, setFilter] = useState<'all' | 'critical'>('all');
     const [showAllGarages, setShowAllGarages] = useState(false);
     const [sortBy, setSortBy] = useState<'status' | null>('status');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -127,8 +127,6 @@ export default function MaintenanceView() {
     // Status filter
     if (filter === 'critical') {
         filteredBuses = filteredBuses.filter(b => b.status === 'Critical');
-    } else if (filter === 'pm') {
-        filteredBuses = filteredBuses.filter(b => b.due_for_pm);
     }
 
     // Search filter
@@ -196,12 +194,7 @@ export default function MaintenanceView() {
                     >
                         Critical
                     </button>
-                    <button
-                        onClick={() => setFilter('pm')}
-                        className={`btn ${filter === 'pm' ? 'btn-primary' : 'btn-secondary'}`}
-                    >
-                        Due for PM
-                    </button>
+                    {/* 'Due for PM' button removed */}
                 </div>
             </div>
 

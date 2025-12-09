@@ -123,17 +123,28 @@ export default function Layout({ children }: LayoutProps) {
                             );
                         })}
                     </nav>
+
+                    {/* Mobile user footer - shows user info and logout (replaces previous Logout button) */}
                     <div className="px-4 py-4 border-t border-slate-700">
-                        <button
-                            onClick={() => {
-                                logout();
-                                setMobileMenuOpen(false);
-                            }}
-                            className="flex items-center gap-3 px-4 py-3 text-red-400 w-full"
-                        >
-                            <LogOut className="w-5 h-5" />
-                            Logout
-                        </button>
+                        <div className="flex items-center gap-3 px-1">
+                            <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium">
+                                {user?.email.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-white text-sm font-medium truncate">{user?.email.split('@')[0]}</p>
+                                <p className="text-slate-400 text-xs truncate">{user?.role}</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    logout();
+                                    setMobileMenuOpen(false);
+                                }}
+                                className="text-slate-400 hover:text-white p-2"
+                                title="Logout"
+                            >
+                                <LogOut className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
