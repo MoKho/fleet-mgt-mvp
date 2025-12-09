@@ -74,13 +74,24 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
 def calculate_bus_status(bus: models.Bus) -> str:
     # Check open WOs
     open_wos = [wo for wo in bus.work_orders if wo.status == models.WorkOrderStatus.OPEN]
-    if not open_wos:
+
+    # Only consider work orders that have a non-null severity (i.e. exclude PM work orders)
+    open_wos_with_sev = [wo for wo in open_wos if wo.severity is not None]
+
+    # If there are no open work orders with a severity, the bus is Ready
+    if not open_wos_with_sev:
         return "Ready"
-    
-    sev1 = any(wo.severity == models.Severity.SEV1 for wo in open_wos)
-    if sev1:
+
+    # Normalize severity values to their string value to be robust against Enum vs string
+    def sev_value(wo):
+        s = wo.severity
+        return getattr(s, 'value', s)
+
+    # If any SEV1 exists, it's Critical
+    if any(sev_value(wo) == models.Severity.SEV1.value for wo in open_wos_with_sev):
         return "Critical"
-    
+
+    # Otherwise there are SEV2/SEV3 open work orders
     return "Needs Maintenance"
 
 @app.get("/buses")
