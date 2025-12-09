@@ -68,6 +68,30 @@ def seed_data():
     db.add_all(buses)
     db.commit()
 
+    # PM Trigger Logic
+    for bus in buses:
+        if (bus.mileage - bus.last_service_mileage > 5000) and not bus.due_for_pm:
+            bus.due_for_pm = True
+            
+            # Check for open PM workorder
+            existing_pm = db.query(WorkOrder).filter(
+                WorkOrder.bus_id == bus.id,
+                WorkOrder.is_pm == True,
+                WorkOrder.status == WorkOrderStatus.OPEN
+            ).first()
+            
+            if not existing_pm:
+                pm_wo = WorkOrder(
+                    bus_id=bus.id,
+                    severity=None,
+                    description="Periodic Preventive Maintenance",
+                    is_pm=True,
+                    status=WorkOrderStatus.OPEN,
+                    reported_by="System"
+                )
+                db.add(pm_wo)
+    db.commit()
+
     # WorkOrders
     issue_pool_sev1 = [
         "Engine overheating — immediate shutdown",
@@ -167,7 +191,7 @@ def seed_data():
         bus.due_for_pm = True
         wo = WorkOrder(
             bus_id=bus.id,
-            description="Scheduled preventive maintenance",
+            description="Periodic Preventive Maintenance",
             severity=None,
             status=WorkOrderStatus.OPEN,
             is_pm=True,
@@ -182,7 +206,7 @@ def seed_data():
         bus.due_for_pm = True
         wo = WorkOrder(
             bus_id=bus.id,
-            description="Scheduled preventive maintenance",
+            description="Periodic Preventive Maintenance",
             severity=None,
             status=WorkOrderStatus.OPEN,
             is_pm=True,
